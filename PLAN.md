@@ -1,7 +1,8 @@
 # PLAN.md
 
-Roadmap for Snaproom. These are planned features — **not yet built**. For the
-current operational guide, see [AGENTS.md](./AGENTS.md).
+Roadmap for Snaproom — vision and planned features. Sections marked
+**Shipped** are built; everything else is not yet built. For the current
+operational guide, see [AGENTS.md](./AGENTS.md).
 
 ## Vision
 
@@ -27,28 +28,20 @@ goes straight into the pipeline.
 > Status: the floor-plan → FAL 2D visualization step has no skill or script
 > yet. Today the pipeline (see AGENTS.md) starts from a source image directly.
 
-## Features
+## Shipped: AR handoff (web → mobile)
 
-1. **Live Augmented Reality** — view the reconstructed space through a mobile
-   phone camera.
+The QR-code handoff from the web app to a mobile viewer is **built** — see the
+"AR handoff" section in [AGENTS.md](./AGENTS.md). The web app emits a
+`snaproom://room?slug=…&host=…` QR when a world is ready; the Expo app in
+`mobile/` opens it in a WebView of the web viewer.
+
+What the mobile app shows today is the **web 3D viewer wrapped in a WebView** —
+a touch-first walk-through, not yet a camera-passthrough AR scan.
+
+## Features (planned)
+
+1. **Live camera AR** — render the world over the phone's live camera feed
+   (gyroscope + plane detection) instead of a WebView. Needs a custom dev build;
+   not possible in plain Expo Go.
 2. **Semantic layer** — live, clickable annotations over objects; tapping an
-   object surfaces its details.
-
-## AR handoff (web → mobile)
-
-Once the 3D render is generated, the web app produces a **QR code**. Scanning it
-opens the companion **Expo** mobile app via a **deep link**, which then runs an
-**AR scan** of that generated render.
-
-- The QR encodes a deep link that targets the Expo app (in development, opened
-  through **Expo Go**).
-- The deep link carries the identity of the generated render so the mobile app
-  knows which world/asset to load into AR.
-- This is the bridge between the desktop viewer (`app/`) and the separate Expo
-  mobile project — they are linked by the deep-link scheme, not a shared build.
-
-### Open questions
-
-- Define the deep-link scheme (e.g. `snaproom://render/<world-slug>`).
-- Decide where the Expo mobile project lives — separate repo, or a `mobile/`
-  workspace alongside `app/`.
+   object surfaces its details. Applies to both the web viewer and mobile.

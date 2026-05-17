@@ -32,6 +32,14 @@ const DebugPanel = import.meta.env.DEV
   ? lazy(() => import('./components/DebugPanel').then((module) => ({ default: module.DebugPanel })))
   : null
 
+/** A world is "ready" once it has a generated environment (splats). */
+function isWorldReady(entry: WorldEntry | undefined): boolean {
+  if (!entry) return false
+  if (entry.worldVersions.length > 0) return true
+  const spzUrls = entry.world?.assets.splats.spz_urls
+  return Boolean(spzUrls && Object.values(spzUrls).some(Boolean))
+}
+
 export function App() {
   const [worlds, setWorlds] = useState(loadWorlds)
   const [refreshingWorlds, setRefreshingWorlds] = useState(false)
@@ -43,6 +51,9 @@ export function App() {
   const currentPath = window.location.pathname
   const urlParams = new URLSearchParams(window.location.search)
   const showLegacyInterface = urlParams.get('legacy') === 'true'
+  // `?embed=1` renders a chrome-free, touch-first viewer — used by the
+  // Snaproom mobile app's WebView when a room is opened from a scanned QR.
+  const embedMode = urlParams.get('embed') === '1'
   
   const [appState, setAppState] = useState<AppState>('welcome')
   const [currentRoomSlug, setCurrentRoomSlug] = useState<string | null>(null)
@@ -182,10 +193,26 @@ export function App() {
     const roomWorld = worlds.find(w => w.slug === currentRoomSlug)
     
     if (roomWorld) {
+      // Chrome-free viewer for the mobile app's WebView.
+      if (embedMode) {
+        return (
+          <div className="relative w-screen h-screen overflow-hidden bg-black">
+            <CleanWorldViewer
+              worlds={worlds}
+              targetSlug={currentRoomSlug}
+              refreshingWorlds={refreshingWorlds}
+              onRefreshWorlds={refreshWorlds}
+            />
+            <TouchControls />
+          </div>
+        )
+      }
+
       return (
         <RoomExplorer
           roomName={roomName || roomWorld.slug}
           roomSlug={currentRoomSlug}
+          worldReady={isWorldReady(roomWorld)}
           onNewRoom={() => {
             setAppState('welcome')
             setCurrentRoomSlug(null)

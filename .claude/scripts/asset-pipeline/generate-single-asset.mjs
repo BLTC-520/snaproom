@@ -146,6 +146,16 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+// Progress logging for the image->3d pipeline. Writes to stderr so the JSON
+// result printed to stdout stays clean for callers/skills that parse it.
+function logStep(message, details) {
+  const suffix =
+    details === undefined
+      ? ""
+      : ` -- ${typeof details === "string" ? details : JSON.stringify(details)}`;
+  console.error(`[image->3d ${nowIso()}] ${message}${suffix}`);
+}
+
 function statusText(value) {
   return String(value || "").toLowerCase();
 }
@@ -380,6 +390,13 @@ export async function generateSingleObject(options) {
   if (!world) throw new Error("world is required.");
   if (!objectId && !directImage) throw new Error("objectId or directImage is required.");
 
+  logStep("pipeline started", {
+    world,
+    object: objectId || directImage,
+    regenerate,
+    reference_only: referenceOnly
+  });
+
   const resolved = await resolveObject({
     world,
     objectId,
@@ -394,10 +411,18 @@ export async function generateSingleObject(options) {
   await ensureDir(resolved.objectDir);
   await writeObjectIntent(resolved.objectJsonPath, world, object);
 
+  logStep("object resolved", {
+    id: object.id,
+    name: object.name,
+    provider,
+    output_dir: resolved.objectDir
+  });
+
   const sourceImages = collectSourceImages(object, directImage);
   if (sourceImages.length === 0) {
     throw new Error(`Object ${object.id} does not have source images for image editing.`);
   }
+  logStep("source images collected", { count: sourceImages.length });
 
   const imageRequests = regenerateReference ? [] : await requestMetadataFiles(resolved.objectDir, object.id, "image");
   const modelRequests = regenerateModel ? [] : await requestMetadataFiles(resolved.objectDir, object.id, "model");
@@ -409,6 +434,7 @@ export async function generateSingleObject(options) {
   const existingModel = regenerateModel ? undefined : await latestArtifact(resolved.objectDir, object.id, MODEL_EXTENSIONS);
 
   if (existingModel && !activeModelRequest && !regenerateModel) {
+    logStep("existing 3D model found -- skipping generation (pass --regenerate to rebuild)", existingModel.path);
     return {
       schema_version: 1,
       world,
@@ -429,13 +455,19 @@ export async function generateSingleObject(options) {
     (existingImage ? undefined : usableImageRequest?.index) ??
     await nextIndex(resolved.objectDir, object.id);
 
+  logStep("generation index assigned", requestIndex);
+
   let generatedImagePath = existingImage?.path;
   let imageMetadataPath;
   let modelMetadataPath;
   let modelFiles = existingModel ? [existingModel.path] : [];
 
   try {
+    if (generatedImagePath) {
+      logStep("reference image already present -- skipping image edit", generatedImagePath);
+    }
     if (!generatedImagePath) {
+      logStep("step: reference image (image edit)");
       const imageRequest =
         activeImageRequest && activeImageRequest.index === requestIndex
           ? activeImageRequest
@@ -448,6 +480,10 @@ export async function generateSingleObject(options) {
           `Image edit prompt is required to create a reference image for ${object.id}. Pass --image-edit-prompt "<prompt>".`
         );
       }
+      logStep(
+        imageRequest ? "resuming in-flight image edit request" : "submitting image edit",
+        { provider: imageEditProvider || object.image_edit_provider || "(default)", index: requestIndex }
+      );
       const imageEdit = imageRequest
         ? await resumeFalRequest(imageRequest, "image-edit", resolved.objectDir)
         : await runImageEdit({
@@ -461,7 +497,9 @@ export async function generateSingleObject(options) {
             resolution: "1K",
             aspectRatio: "1:1",
             outputFormat: "png",
-            limitGenerations: true
+            limitGenerations: true,
+            onSubmit: (submitted) => logStep("image edit submitted to provider", submitted.request_id),
+            onStatus: (status) => logStep("image edit status", status.status)
           });
 
       const rawGeneratedImage = firstGeneratedImage(imageEdit);
@@ -476,6 +514,7 @@ export async function generateSingleObject(options) {
         requestIndex
       );
       generatedImagePath = generatedImage.path;
+      logStep("reference image ready", generatedImagePath);
       const imageEditMetadata = (await readJsonIfExists(imageMetadataPath)) || imageEdit;
       await writeJson(imageMetadataPath, {
         ...imageEditMetadata,
@@ -490,6 +529,7 @@ export async function generateSingleObject(options) {
     }
 
     if (referenceOnly) {
+      logStep("reference-only mode -- pipeline complete (no 3D model requested)");
       return {
         schema_version: 1,
         world,
@@ -504,6 +544,7 @@ export async function generateSingleObject(options) {
 
     const currentModel = regenerateModel ? undefined : await latestArtifact(resolved.objectDir, object.id, MODEL_EXTENSIONS);
     if (!currentModel || activeModelRequest) {
+      logStep("step: 3D model generation");
       const modelRequest =
         activeModelRequest && activeModelRequest.index === requestIndex
           ? activeModelRequest
@@ -511,6 +552,10 @@ export async function generateSingleObject(options) {
             ? usableModelRequest
             : undefined;
       modelMetadataPath = modelRequest?.path || requestPath(resolved.objectDir, requestIndex, object.id, "model");
+      logStep(
+        modelRequest ? "resuming in-flight 3D model request" : "submitting 3D model generation",
+        { provider, reference_image: generatedImagePath, index: requestIndex }
+      );
       const modelGeneration = modelRequest
         ? await resumeFalRequest(
             modelRequest,
@@ -538,9 +583,12 @@ export async function generateSingleObject(options) {
             animationActionId: meshyAnimationActionId,
             enableSafetyChecker: meshyEnableSafetyChecker,
             enableAnimation: meshyEnableAnimation,
-            enableRigging: meshyEnableRigging
+            enableRigging: meshyEnableRigging,
+            onSubmit: (submitted) => logStep("3D request submitted to FAL", submitted.request_id),
+            onStatus: (status) => logStep("3D generation status", status.status)
           });
 
+      logStep("3D generation finished -- downloading model files");
       const normalizedModelFiles = await normalizeModelFiles(
         modelGeneration.downloaded_files || [],
         resolved.objectDir,
@@ -548,6 +596,7 @@ export async function generateSingleObject(options) {
         requestIndex
       );
       modelFiles = normalizedModelFiles.map((file) => file.path);
+      logStep("3D model files downloaded", { count: modelFiles.length, files: modelFiles });
       const modelMetadata = (await readJsonIfExists(modelMetadataPath)) || modelGeneration;
       await writeJson(modelMetadataPath, {
         ...modelMetadata,
@@ -560,8 +609,10 @@ export async function generateSingleObject(options) {
       });
     } else {
       modelFiles = [currentModel.path];
+      logStep("3D model already present -- skipping generation", currentModel.path);
     }
 
+    logStep("pipeline complete", { provider, model_files: modelFiles.length });
     return {
       schema_version: 1,
       world,
@@ -574,6 +625,7 @@ export async function generateSingleObject(options) {
       request_metadata: [imageMetadataPath, modelMetadataPath].filter(Boolean)
     };
   } catch (error) {
+    logStep("pipeline FAILED -- aborting (no fallback)", error.message);
     throw Object.assign(error, {
       object,
       object_json: resolved.objectJsonPath,

@@ -864,5 +864,7 @@ function worldsPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), worldsPlugin()],
-  server: { fs: { allow: ['..'] } },
+  // `host: true` binds the dev server to the LAN so a phone can scan the
+  // AR QR code and reach this viewer over Wi-Fi.
+  server: { host: true, fs: { allow: ['..'] } },
 })

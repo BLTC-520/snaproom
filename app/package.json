@@ -20,6 +20,7 @@
     "@sparkjsdev/spark": "^2.0.0",
     "leva": "^0.10.1",
     "postprocessing": "^6.36.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "tailwind-merge": "^3.5.0",

@@ -1,8 +1,8 @@
 # AGENTS.md
 
 Operational guide for agents working on this repo. Describes what exists today.
-For planned features (floor-plan ingestion, AR, semantic layer, mobile handoff)
-see [PLAN.md](./PLAN.md).
+For planned features (floor-plan ingestion, semantic layer) see
+[PLAN.md](./PLAN.md). The mobile app is in [`mobile/`](./mobile/AGENTS.md).
 
 ## What Snaproom is
 
@@ -28,11 +28,15 @@ environment, 3D object meshes, and sound — disk-first, no manual modeling.
 
 ```
 app/        React + Vite + react-three-fiber viewer (Three.js, Spark splats)
+mobile/     Expo (React Native) AR viewer — see mobile/AGENTS.md
 input/      drop-zone for source images
 worlds/     per-world envelopes: project.json, scene.json, source/, output/
 output/     shared generated output
 .claude/    skills, agents, hooks, scripts, rules
 ```
+
+`mobile/` is a standalone Expo project — not part of the `app` bun workspace.
+It uses `npm`; install and run it separately (`cd mobile && npm install`).
 
 `worlds/<slug>/source/` holds stable source files; `output/` holds generated
 assets. Generated files use `N-slug.ext` indexing — `0` is the original,
@@ -49,6 +53,23 @@ each generated file. Inspect state with `ls -a` and read the JSON sidecars.
 | Typecheck     | `bun run typecheck` |
 
 The app workspace lives in `app/`; the root `package.json` proxies these.
+
+## AR handoff (web → mobile)
+
+When a world finishes generating, the room view shows a **View in AR** button
+(`app/src/components/RoomExplorer.tsx`, gated on `isWorldReady`). It opens a QR
+modal (`app/src/components/ArQrModal.tsx`) encoding a deep link:
+
+```
+snaproom://room?slug=<slug>&host=<window.location.host>
+```
+
+Scanning it opens the `mobile/` Expo app, which loads the web viewer for that
+world in a WebView at `/<slug>?embed=1`. The `embed=1` query param makes
+`app/src/App.tsx` render a chrome-free, touch-first viewer.
+
+For the QR to be reachable, open the web app via the machine's LAN address
+(not `localhost`) — the Vite dev server binds to the LAN via `server.host`.
 
 ## Conventions for agents
 

@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react'
 import * as React from 'react'
-import { House, Upload, Share, Gear, Eye, EyeSlash, SpeakerHigh, SpeakerSlash, ArrowsOut, Question } from '@phosphor-icons/react'
+import { Upload, Share, Gear, Eye, EyeSlash, SpeakerHigh, SpeakerSlash, ArrowsOut, Question, DeviceMobile } from '@phosphor-icons/react'
 import { AppButton } from './AppButton'
-import { chrome } from './AppChrome'
+import { ArQrModal } from './ArQrModal'
 import { useAudioStore } from '../store/audio'
 import { useDebugStore, type ControllerMode } from '../store/debug'
 import { ViewerQuality } from '../types/world'
@@ -10,6 +10,8 @@ import { ViewerQuality } from '../types/world'
 interface Props {
   roomName: string
   roomSlug: string
+  /** True once the world has finished generating — gates the AR QR action. */
+  worldReady?: boolean
   onNewRoom: () => void
   onShareRoom?: () => void
   children?: React.ReactNode
@@ -30,9 +32,10 @@ function nextMode<T>(items: readonly { mode: T }[], current: T) {
   return items[(index + 1) % items.length].mode
 }
 
-export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Props) {
+export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShareRoom, children }: Props) {
   const [showControls, setShowControls] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
+  const [showAr, setShowAr] = useState(false)
   
   const muted = useAudioStore((s) => s.muted)
   const toggleMuted = useAudioStore((s) => s.toggleMuted)
@@ -87,6 +90,16 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           </div>
           
           <div className="flex gap-2">
+            {worldReady && (
+              <AppButton
+                onClick={() => setShowAr(true)}
+                className="bg-gradient-to-br from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white px-4 py-2 flex items-center gap-2 font-medium shadow-lg shadow-cyan-500/20"
+              >
+                <DeviceMobile size={16} />
+                View in AR
+              </AppButton>
+            )}
+
             <AppButton
               onClick={onNewRoom}
               className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white px-4 py-2 flex items-center gap-2"
@@ -94,7 +107,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
               <Upload size={16} />
               New Room
             </AppButton>
-            
+
             {onShareRoom && (
               <AppButton
                 onClick={onShareRoom}
@@ -220,6 +233,14 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           </div>
         </div>
       )}
+
+      {/* AR QR modal */}
+      <ArQrModal
+        slug={roomSlug}
+        roomName={roomName}
+        open={showAr}
+        onClose={() => setShowAr(false)}
+      />
     </div>
   )
 }
