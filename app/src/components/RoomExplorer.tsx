@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react'
 import * as React from 'react'
-import { House, Upload, Share, Gear, Eye, EyeSlash, SpeakerHigh, SpeakerSlash, ArrowsOut, Question } from '@phosphor-icons/react'
+import { Upload, Share, Gear, Eye, EyeSlash, SpeakerHigh, SpeakerSlash, ArrowsOut, Question } from '@phosphor-icons/react'
 import { AppButton } from './AppButton'
-import { chrome } from './AppChrome'
 import { useAudioStore } from '../store/audio'
 import { useDebugStore, type ControllerMode } from '../store/debug'
 import { ViewerQuality } from '../types/world'
@@ -78,10 +77,10 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
 
       {/* Top Bar */}
       {showControls && (
-        <div className="absolute top-4 left-4 right-4 z-30 flex justify-between items-center">
-          <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <div className="w-4 h-4 bg-white/90 rounded-sm" />
+        <div className="absolute left-3 right-3 top-3 z-30 flex items-center justify-between gap-3 md:left-4 md:right-4 md:top-4">
+          <div className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-black/55 px-4 py-3 backdrop-blur-md">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-[var(--line)] bg-black/35">
+              <div className="h-4 w-4 rounded-sm bg-[var(--accent)]" />
             </div>
             <span className="text-white font-semibold">{roomName}</span>
           </div>
@@ -89,7 +88,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           <div className="flex gap-2">
             <AppButton
               onClick={onNewRoom}
-              className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white px-4 py-2 flex items-center gap-2"
+              className="hidden items-center gap-2 rounded-lg border border-[var(--line)] bg-black/45 px-3 py-2 text-white backdrop-blur-sm hover:bg-black/70 sm:inline-flex"
             >
               <Upload size={16} />
               New Room
@@ -98,10 +97,10 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
             {onShareRoom && (
               <AppButton
                 onClick={onShareRoom}
-                className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white px-4 py-2 flex items-center gap-2"
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] bg-black/45 px-3 py-2 text-white backdrop-blur-sm hover:bg-black/70"
               >
                 <Share size={16} />
-                Share
+                <span className="hidden sm:inline">Share</span>
               </AppButton>
             )}
           </div>
@@ -114,7 +113,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           {/* Movement Mode */}
           <AppButton
             onClick={() => setControllerMode(nextMode(CONTROLLER_MODES, controllerMode))}
-            className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white px-3 py-2 flex items-center gap-2 text-sm"
+            className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-black/45 px-3 py-2 text-sm text-white backdrop-blur-sm hover:bg-black/70"
           >
             <ArrowsOut size={16} />
             {currentControllerMode.label}
@@ -123,7 +122,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           {/* Audio */}
           <AppButton
             onClick={toggleMuted}
-            className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white p-2"
+            className="rounded-lg border border-[var(--line)] bg-black/45 p-2 text-white backdrop-blur-sm hover:bg-black/70"
             title={muted ? 'Unmute' : 'Mute'}
           >
             {muted ? <SpeakerSlash size={16} /> : <SpeakerHigh size={16} />}
@@ -132,7 +131,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           {/* Quality */}
           <AppButton
             onClick={() => setViewerQuality(nextMode(QUALITY_MODES, viewerQuality))}
-            className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white px-3 py-2 flex items-center gap-2 text-sm"
+            className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-black/45 px-3 py-2 text-sm text-white backdrop-blur-sm hover:bg-black/70"
           >
             <Gear size={16} />
             {currentQuality.label}
@@ -141,7 +140,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
           {/* Help */}
           <AppButton
             onClick={() => setShowHelp(prev => !prev)}
-            className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white p-2"
+            className="rounded-lg border border-[var(--line)] bg-black/45 p-2 text-white backdrop-blur-sm hover:bg-black/70"
           >
             <Question size={16} />
           </AppButton>
@@ -152,7 +151,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
       <div className="absolute bottom-4 right-4 z-30">
         <AppButton
           onClick={() => setShowControls(prev => !prev)}
-          className="bg-black/40 backdrop-blur-sm border border-white/20 hover:bg-white/10 text-white p-2"
+          className="rounded-lg border border-[var(--line)] bg-black/45 p-2 text-white backdrop-blur-sm hover:bg-black/70"
           title={showControls ? 'Hide Controls' : 'Show Controls'}
         >
           {showControls ? <EyeSlash size={16} /> : <Eye size={16} />}
@@ -162,8 +161,8 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
       {/* Help Panel */}
       {showHelp && showControls && (
         <div className="absolute inset-4 z-40 flex items-center justify-center">
-          <div className="bg-black/80 backdrop-blur-sm border border-white/20 rounded-lg max-w-md w-full">
-            <div className="flex items-center justify-between p-4 border-b border-white/20">
+          <div className="max-h-full w-full max-w-md overflow-hidden rounded-lg border border-[var(--line)] bg-black/85 backdrop-blur-sm">
+            <div className="flex items-center justify-between border-b border-[var(--line)] p-4">
               <h3 className="text-white font-medium">Controls</h3>
               <button
                 onClick={() => setShowHelp(false)}
@@ -172,7 +171,7 @@ export function RoomExplorer({ roomName, onNewRoom, onShareRoom, children }: Pro
                 ✕
               </button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto p-4">
               <div>
                 <h4 className="text-white/80 font-medium mb-2">Navigation</h4>
                 <div className="space-y-1 text-sm text-white/60">
