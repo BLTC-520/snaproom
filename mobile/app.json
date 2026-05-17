@@ -9,6 +9,14 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#05070D",
     "newArchEnabled": true,
+    "plugins": [
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "Allow Snaproom to use device motion so you can look around the scene by moving your phone."
+        }
+      ]
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",

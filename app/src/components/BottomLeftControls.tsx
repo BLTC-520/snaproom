@@ -14,13 +14,13 @@ import { isEditableTarget } from '../utils/dom'
 import { AppButton } from './AppButton'
 import { chrome } from './AppChrome'
 
-const OBJECT_MODES = [
+export const OBJECT_MODES = [
   { mode: ObjectRenderMode.Lit, Icon: GlobeHemisphereEast, label: 'Lit' },
   { mode: ObjectRenderMode.ShadedWireframe, Icon: Sphere, label: 'Shaded Wireframe' },
   { mode: ObjectRenderMode.Wireframe, Icon: GlobeSimple, label: 'Wireframe' },
 ] as const
 
-const WORLD_MODES = [
+export const WORLD_MODES = [
   { mode: WorldRenderMode.Combined, Icon: ParkIcon, label: 'Scene + Objects' },
   { mode: WorldRenderMode.SplatOnly, Icon: MountainsIcon, label: 'Scene' },
   { mode: WorldRenderMode.ObjectOnly, Icon: CubeIcon, label: 'Objects' },

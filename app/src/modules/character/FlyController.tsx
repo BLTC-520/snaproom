@@ -2,6 +2,7 @@ import { useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCameraGestures } from '../camera/useCameraGestures'
+import { useDeviceOrientationLook } from '../camera/useDeviceOrientationLook'
 import { cameraFocusTarget } from '../camera/cameraFocus'
 import { useDebugStore } from '../../store/debug'
 import { isEditableTarget } from '../../utils/dom'
@@ -31,6 +32,8 @@ const _euler = new THREE.Euler(0, 0, 0, 'YXZ')
 export const FlyController = forwardRef<FlyControllerHandle, FlyControllerProps>(function FlyController({ preserveCameraOnMount = false }, ref) {
   const { camera, gl } = useThree()
   const mouseSensitivity = useDebugStore((s) => s.flyMouseSensitivity)
+  // Phone-motion look — fed by the Snaproom mobile app; inert in a browser.
+  const deviceLook = useDeviceOrientationLook()
   const keys = useRef(new Set<string>())
   const rawYaw = useRef(0)
   const rawPitch = useRef(0)
@@ -100,6 +103,17 @@ export const FlyController = forwardRef<FlyControllerHandle, FlyControllerProps>
   }, [gl])
 
   useFrame((_state, delta) => {
+    // Apply accumulated phone-motion look (Snaproom mobile app). Phone input
+    // cancels any in-progress click-to-focus tween so they don't fight.
+    if (deviceLook.current.active && (deviceLook.current.yaw !== 0 || deviceLook.current.pitch !== 0)) {
+      cameraFocusTarget.current = null
+      rawYaw.current += deviceLook.current.yaw
+      rawPitch.current += deviceLook.current.pitch
+      rawPitch.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, rawPitch.current))
+      deviceLook.current.yaw = 0
+      deviceLook.current.pitch = 0
+    }
+
     // Camera focus: lerp rawYaw/rawPitch toward clicked object (only when pointer is not locked)
     const focusTarget = cameraFocusTarget.current
     if (focusTarget && document.pointerLockElement !== gl.domElement) {

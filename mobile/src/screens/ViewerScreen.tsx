@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { DeviceMotion } from 'expo-sensors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Logo } from '../components/Logo';
 import { viewerUrl, type RoomTarget } from '../linking';
@@ -32,6 +33,9 @@ export function ViewerScreen({ target, onExit }: Props) {
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
+  const [showHint, setShowHint] = useState(true);
+  // The WebView only accepts injected JS once a document has loaded.
+  const webViewReady = useRef(false);
 
   const uri = viewerUrl(target);
   const title = humanizeSlug(target.slug);
@@ -42,6 +46,45 @@ export function ViewerScreen({ target, onExit }: Props) {
     webViewRef.current?.reload();
   };
 
+  // Stream the phone's orientation into the WebView so moving the phone pans
+  // the in-scene camera. expo-sensors provides drift-free fused attitude; the
+  // web viewer turns each sample into an incremental look delta.
+  useEffect(() => {
+    let subscription: ReturnType<typeof DeviceMotion.addListener> | undefined;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await DeviceMotion.requestPermissionsAsync();
+      } catch {
+        // Not every platform gates motion behind a prompt — carry on.
+      }
+      if (cancelled) return;
+      DeviceMotion.setUpdateInterval(33); // ~30 Hz — smooth without flooding the bridge
+      subscription = DeviceMotion.addListener(({ rotation, orientation }) => {
+        if (!rotation || !webViewReady.current) return;
+        const { alpha, beta, gamma } = rotation;
+        const detail =
+          `{alpha:${alpha.toFixed(5)},beta:${beta.toFixed(5)},` +
+          `gamma:${gamma.toFixed(5)},orientation:${orientation ?? 0}}`;
+        webViewRef.current?.injectJavaScript(
+          `window.dispatchEvent(new CustomEvent('snaproom:orientation',{detail:${detail}}));true;`,
+        );
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      subscription?.remove();
+    };
+  }, []);
+
+  // Auto-dismiss the one-time controls hint.
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHint(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <View style={styles.flex}>
       <WebView
@@ -50,8 +93,14 @@ export function ViewerScreen({ target, onExit }: Props) {
         originWhitelist={['*']}
         style={styles.webview}
         containerStyle={styles.webview}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
+        onLoadStart={() => {
+          webViewReady.current = false;
+          setLoading(true);
+        }}
+        onLoadEnd={() => {
+          webViewReady.current = true;
+          setLoading(false);
+        }}
         onError={() => setErrored(true)}
         // A failed status on the top-level document means the room is
         // unreachable; sub-resource hiccups should not blank the screen.
@@ -125,6 +174,20 @@ export function ViewerScreen({ target, onExit }: Props) {
             >
               <Text style={styles.secondaryButtonText}>Back</Text>
             </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {/* One-time controls hint */}
+      {showHint && !loading && !errored ? (
+        <View
+          style={[styles.hint, { bottom: insets.bottom + spacing.lg }]}
+          pointerEvents="none"
+        >
+          <View style={styles.hintPill}>
+            <Text style={styles.hintText}>
+              Move your phone to look around · drag to walk
+            </Text>
           </View>
         </View>
       ) : null}
@@ -212,4 +275,15 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceBorder,
   },
   secondaryButtonText: { color: colors.textPrimary, fontWeight: '600', fontSize: 15 },
+
+  hint: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  hintPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: GLASS,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  hintText: { ...typography.label, color: colors.textSecondary },
 });

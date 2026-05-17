@@ -30,7 +30,10 @@
       "Bash(echo \"[exit code: $?]\")",
       "Bash(ps -p 49672 -o pid,etime,command)",
       "Bash(echo \"[exit: $?]\")",
-      "Bash(break)"
+      "Bash(break)",
+      "Bash(brew install *)",
+      "Bash(cloudflared --version)",
+      "Bash(cloudflared tunnel *)"
     ]
   }
 }

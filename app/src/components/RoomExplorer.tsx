@@ -1,8 +1,21 @@
 import { useState, useCallback } from 'react'
 import * as React from 'react'
-import { Upload, Share, Gear, Eye, EyeSlash, SpeakerHigh, SpeakerSlash, ArrowsOut, Question, DeviceMobile } from '@phosphor-icons/react'
+import {
+  Upload,
+  Share,
+  Gear,
+  Eye,
+  EyeSlash,
+  SpeakerHigh,
+  SpeakerSlash,
+  ArrowsOut,
+  Question,
+  DeviceMobile,
+  type Icon,
+} from '@phosphor-icons/react'
 import { AppButton } from './AppButton'
 import { ArQrModal } from './ArQrModal'
+import { ViewerModeHotkeys, OBJECT_MODES, WORLD_MODES } from './BottomLeftControls'
 import { useAudioStore } from '../store/audio'
 import { useDebugStore, type ControllerMode } from '../store/debug'
 import { ViewerQuality } from '../types/world'
@@ -12,6 +25,8 @@ interface Props {
   roomSlug: string
   /** True once the world has finished generating — gates the AR QR action. */
   worldReady?: boolean
+  /** The image this room was generated from, shown as an on-canvas reference. */
+  sourceImageUrl?: string
   onNewRoom: () => void
   onShareRoom?: () => void
   children?: React.ReactNode
@@ -32,24 +47,72 @@ function nextMode<T>(items: readonly { mode: T }[], current: T) {
   return items[(index + 1) % items.length].mode
 }
 
-export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShareRoom, children }: Props) {
+/** A segmented icon group for a 3D render mode (scene visibility / object shading). */
+function ModeGroup<T extends string>({
+  modes,
+  active,
+  onSelect,
+}: {
+  modes: readonly { readonly mode: T; readonly Icon: Icon; readonly label: string }[]
+  active: T
+  onSelect: (mode: T) => void
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-[var(--line)] bg-black/45 p-1 backdrop-blur-sm">
+      {modes.map(({ mode, Icon: ModeIcon, label }) => {
+        const isActive = active === mode
+        return (
+          <button
+            key={String(mode)}
+            type="button"
+            onClick={() => onSelect(mode)}
+            title={label}
+            aria-label={label}
+            aria-pressed={isActive}
+            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors duration-150 ${
+              isActive ? 'bg-white/15 text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <ModeIcon size={16} weight={isActive ? 'fill' : 'regular'} />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+export function RoomExplorer({
+  roomName,
+  roomSlug,
+  worldReady,
+  sourceImageUrl,
+  onNewRoom,
+  onShareRoom,
+  children,
+}: Props) {
   const [showControls, setShowControls] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
   const [showAr, setShowAr] = useState(false)
-  
+  const [refExpanded, setRefExpanded] = useState(false)
+  const [refError, setRefError] = useState(false)
+
   const muted = useAudioStore((s) => s.muted)
   const toggleMuted = useAudioStore((s) => s.toggleMuted)
   const controllerMode = useDebugStore((s) => s.controllerMode)
   const setControllerMode = useDebugStore((s) => s.setControllerMode)
   const viewerQuality = useDebugStore((s) => s.viewerQuality)
   const setViewerQuality = useDebugStore((s) => s.setViewerQuality)
+  const worldRenderMode = useDebugStore((s) => s.worldRenderMode)
+  const setWorldRenderMode = useDebugStore((s) => s.setWorldRenderMode)
+  const objectRenderMode = useDebugStore((s) => s.objectRenderMode)
+  const setObjectRenderMode = useDebugStore((s) => s.setObjectRenderMode)
 
   const currentControllerMode = CONTROLLER_MODES.find(item => item.mode === controllerMode) ?? CONTROLLER_MODES[0]
   const currentQuality = QUALITY_MODES.find(item => item.mode === viewerQuality) ?? QUALITY_MODES[0]
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     if (e.target && (e.target as Element).tagName === 'INPUT') return
-    
+
     switch (e.key.toLowerCase()) {
       case 'h':
         setShowHelp(prev => !prev)
@@ -74,10 +137,15 @@ export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShar
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [handleKeyPress])
 
+  const showReference = showControls && Boolean(sourceImageUrl) && !refError
+
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden">
       {/* 3D Viewer */}
       {children}
+
+      {/* Alt+digit / Shift+digit shortcuts for render modes */}
+      <ViewerModeHotkeys />
 
       {/* Top Bar */}
       {showControls && (
@@ -88,7 +156,7 @@ export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShar
             </div>
             <span className="text-white font-semibold">{roomName}</span>
           </div>
-          
+
           <div className="flex gap-2">
             {worldReady && (
               <AppButton
@@ -123,7 +191,7 @@ export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShar
 
       {/* Bottom Controls */}
       {showControls && (
-        <div className="absolute bottom-4 left-4 z-30 flex items-center gap-2">
+        <div className="absolute bottom-4 left-4 z-30 flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2">
           {/* Movement Mode */}
           <AppButton
             onClick={() => setControllerMode(nextMode(CONTROLLER_MODES, controllerMode))}
@@ -158,14 +226,43 @@ export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShar
           >
             <Question size={16} />
           </AppButton>
+
+          <div className="hidden h-7 w-px bg-[var(--line)] sm:block" />
+
+          {/* Render modes: scene visibility + object shading (wireframe) */}
+          <ModeGroup modes={WORLD_MODES} active={worldRenderMode} onSelect={setWorldRenderMode} />
+          <ModeGroup modes={OBJECT_MODES} active={objectRenderMode} onSelect={setObjectRenderMode} />
         </div>
       )}
 
-      {/* Hide UI Toggle */}
-      <div className="absolute bottom-4 right-4 z-30">
+      {/* Bottom-right: source reference + UI toggle */}
+      <div className="absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2">
+        {showReference && (
+          <figure className="overflow-hidden rounded-lg border border-[var(--line)] bg-black/55 backdrop-blur-md">
+            <figcaption className="flex items-center justify-between gap-6 border-b border-[var(--line)] px-2.5 py-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/55">
+                Source image
+              </span>
+              <button
+                type="button"
+                onClick={() => setRefExpanded((v) => !v)}
+                className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 transition-colors hover:text-[var(--accent)]"
+              >
+                {refExpanded ? 'Shrink' : 'Expand'}
+              </button>
+            </figcaption>
+            <img
+              src={sourceImageUrl}
+              alt={`Reference image for ${roomName}`}
+              onError={() => setRefError(true)}
+              className={`block bg-black/40 object-contain ${refExpanded ? 'h-60 w-80' : 'h-28 w-48'}`}
+            />
+          </figure>
+        )}
+
         <AppButton
           onClick={() => setShowControls(prev => !prev)}
-          className="rounded-lg border border-[var(--line)] bg-black/45 p-2 text-white backdrop-blur-sm hover:bg-black/70"
+          className="self-end rounded-lg border border-[var(--line)] bg-black/45 p-2 text-white backdrop-blur-sm hover:bg-black/70"
           title={showControls ? 'Hide Controls' : 'Show Controls'}
         >
           {showControls ? <EyeSlash size={16} /> : <Eye size={16} />}
@@ -203,7 +300,7 @@ export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShar
                   </div>
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-white/80 font-medium mb-2">Shortcuts</h4>
                 <div className="space-y-1 text-sm text-white/60">
@@ -222,6 +319,14 @@ export function RoomExplorer({ roomName, roomSlug, worldReady, onNewRoom, onShar
                   <div className="flex justify-between">
                     <span>U</span>
                     <span>Toggle UI</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Shift + 1/2/3</span>
+                    <span>Scene render mode</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Alt + 1/2/3</span>
+                    <span>Object shading</span>
                   </div>
                   <div className="flex justify-between">
                     <span>H</span>

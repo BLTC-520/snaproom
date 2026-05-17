@@ -57,30 +57,38 @@ export function App() {
   
   const [appState, setAppState] = useState<AppState>('welcome')
   const [currentRoomSlug, setCurrentRoomSlug] = useState<string | null>(null)
-  
-  // Initialize app state based on URL and worlds
+  // Mirror appState in a ref so the URL-sync effect can read the live value
+  // without depending on it (which would re-run and clobber the flow).
+  const appStateRef = useRef(appState)
+  appStateRef.current = appState
+
+  // Initialize app state from the URL. This effect also re-runs whenever the
+  // worlds list refreshes (dev HMR) so deep links can resolve once worlds load.
+  // It must NOT interrupt an active upload/processing flow or an open room:
+  // during those the URL is still "/", and a refresh would otherwise bounce
+  // the user back to the welcome screen.
   useEffect(() => {
     if (showLegacyInterface) {
       setAppState('legacy')
       return
     }
-    
-    if (currentPath === '/' || currentPath === '') {
-      setAppState('welcome')
-      return
-    }
-    
-    // If there's a path like /bedroom, try to show that room
-    const slugFromPath = currentPath.slice(1).split('/')[0] // remove leading slash and get first segment
+
+    // A path like /bedroom: resolve it to that room once the world is known.
+    const slugFromPath = currentPath.slice(1).split('/')[0]
     const foundWorld = worlds.find(w => w.slug === slugFromPath)
-    
+
     if (slugFromPath && foundWorld) {
       setAppState('room')
       setCurrentRoomSlug(slugFromPath)
       setRoomName(foundWorld.project?.display_name || foundWorld.slug)
-    } else {
-      setAppState('welcome')
+      return
     }
+
+    // Root URL with no matching world: welcome is the default, but never
+    // override a flow the user is actively in.
+    const current = appStateRef.current
+    if (current === 'upload' || current === 'processing' || current === 'room') return
+    setAppState('welcome')
   }, [currentPath, worlds, showLegacyInterface])
   
   // Check if we have worlds
@@ -181,9 +189,11 @@ export function App() {
         fileCount={uploadedFiles.length}
         uploadedFiles={uploadedFiles}
         onComplete={(slug) => {
+          // Make the finished room URL-addressable so a reload (or the
+          // worlds-list refresh) resolves back to it instead of welcome.
+          window.history.pushState(null, '', `/${slug}`)
           setCurrentRoomSlug(slug)
           setAppState('room')
-          // TODO: Save room data and trigger world generation
         }}
         onCancel={() => setAppState('welcome')}
       />
@@ -214,7 +224,11 @@ export function App() {
           roomName={roomName || roomWorld.slug}
           roomSlug={currentRoomSlug}
           worldReady={isWorldReady(roomWorld)}
+          sourceImageUrl={roomWorld.sourceImageUrl}
           onNewRoom={() => {
+            // Drop the room slug from the URL so a worlds refresh doesn't
+            // resolve the old path straight back into the room.
+            window.history.pushState(null, '', '/')
             setAppState('welcome')
             setCurrentRoomSlug(null)
             setRoomName('')

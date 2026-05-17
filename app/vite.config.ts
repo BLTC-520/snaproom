@@ -983,6 +983,8 @@ function worldsPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), worldsPlugin()],
   // `host: true` binds the dev server to the LAN so a phone can scan the
-  // AR QR code and reach this viewer over Wi-Fi.
-  server: { host: true, fs: { allow: ['..'] } },
+  // AR QR code and reach this viewer over Wi-Fi. `allowedHosts: true` lets a
+  // public tunnel domain (ngrok / cloudflared) through Vite's host check so
+  // the phone can reach the viewer over cellular when there is no shared LAN.
+  server: { host: true, allowedHosts: true, fs: { allow: ['..'] } },
 })

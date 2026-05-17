@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider, useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
 import { useCameraGestures } from '../camera/useCameraGestures'
+import { useDeviceOrientationLook } from '../camera/useDeviceOrientationLook'
 import { useDebugStore } from '../../store/debug'
 import { isEditableTarget } from '../../utils/dom'
 import {
@@ -37,6 +38,8 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
   const { camera, gl } = useThree()
   const mouseSensitivity = useDebugStore((s) => s.flyMouseSensitivity)
   const { rapier, world } = useRapier()
+  // Phone-motion look — fed by the Snaproom mobile app; inert in a browser.
+  const deviceLook = useDeviceOrientationLook()
 
   const keys = useRef(new Set<string>())
   const jumpQueued = useRef(false)
@@ -165,6 +168,15 @@ export const CharacterController = forwardRef<CharacterControllerHandle>(
   useFrame((_state, delta) => {
     const body = bodyRef.current
     if (!body) return
+
+    // Apply accumulated phone-motion look (Snaproom mobile app).
+    if (deviceLook.current.active) {
+      rawYaw.current += deviceLook.current.yaw
+      rawPitch.current += deviceLook.current.pitch
+      rawPitch.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, rawPitch.current))
+      deviceLook.current.yaw = 0
+      deviceLook.current.pitch = 0
+    }
 
     const smoothing = 1 - Math.pow(1 - MOUSE_SMOOTHING, delta * 60)
     smoothYaw.current += (rawYaw.current - smoothYaw.current) * smoothing

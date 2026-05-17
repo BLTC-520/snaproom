@@ -13,11 +13,13 @@ interface Props {
 
 /**
  * Build the deep link the Snaproom mobile app handles:
- *   snaproom://room?slug=<slug>&host=<host>
- * `host` is this dev server's host so the phone can reach the web viewer.
+ *   snaproom://room?slug=<slug>&host=<origin>
+ * `origin` is this page's full origin (scheme + host + port) so the phone
+ * reaches the viewer correctly whether that's a LAN address (http) or a
+ * public tunnel URL (https).
  */
-function buildDeepLink(slug: string, host: string): string {
-  return `snaproom://room?slug=${encodeURIComponent(slug)}&host=${encodeURIComponent(host)}`
+function buildDeepLink(slug: string, origin: string): string {
+  return `snaproom://room?slug=${encodeURIComponent(slug)}&host=${encodeURIComponent(origin)}`
 }
 
 function isUnreachableHost(hostname: string): boolean {
@@ -36,7 +38,7 @@ function isUnreachableHost(hostname: string): boolean {
 export function ArQrModal({ slug, roomName, open, onClose }: Props) {
   const [copied, setCopied] = useState(false)
 
-  const host = typeof window !== 'undefined' ? window.location.host : ''
+  const host = typeof window !== 'undefined' ? window.location.origin : ''
   const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
   const deepLink = useMemo(() => buildDeepLink(slug, host), [slug, host])
   const unreachable = isUnreachableHost(hostname)
