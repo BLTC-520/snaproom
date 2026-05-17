@@ -4,12 +4,26 @@ import { WorldViewer } from './components/WorldViewer'
 import { WorldSidebar } from './components/WorldSidebar'
 import { BottomLeftControls, ViewerModeHotkeys } from './components/BottomLeftControls'
 import { TouchControls } from './components/TouchControls'
+import { WelcomeInterface } from './components/WelcomeInterface'
+import { UploadInterface } from './components/UploadInterface'
+import { ProcessingInterface } from './components/ProcessingInterface'
+import { RoomExplorer } from './components/RoomExplorer'
+import { CleanWorldViewer } from './components/CleanWorldViewer'
 import { useSceneProject } from './modules/scene/useSceneProject'
 import { fetchWorlds, loadWorlds } from './utils/worldLoader'
 import { useDebugStore } from './store/debug'
 import { isEditableTarget } from './utils/dom'
 import type { WorldEntry, WorldHoverPreview, WorldObjectAsset } from './types/world'
 import { TerminalWindowIcon } from '@phosphor-icons/react'
+
+type AppState = 'welcome' | 'upload' | 'processing' | 'room' | 'legacy'
+
+interface UploadedFile {
+  id: string
+  file: File
+  preview: string
+  type: 'photo' | 'floorplan'
+}
 
 const LevaPanel = import.meta.env.DEV
   ? lazy(() => import('leva').then((module) => ({ default: module.Leva })))
@@ -21,7 +35,45 @@ const DebugPanel = import.meta.env.DEV
 export function App() {
   const [worlds, setWorlds] = useState(loadWorlds)
   const [refreshingWorlds, setRefreshingWorlds] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [roomName, setRoomName] = useState('')
   const refreshTimeoutRef = useRef<number | undefined>(undefined)
+  
+  // Check current URL to determine initial state
+  const currentPath = window.location.pathname
+  const urlParams = new URLSearchParams(window.location.search)
+  const showLegacyInterface = urlParams.get('legacy') === 'true'
+  
+  const [appState, setAppState] = useState<AppState>('welcome')
+  const [currentRoomSlug, setCurrentRoomSlug] = useState<string | null>(null)
+  
+  // Initialize app state based on URL and worlds
+  useEffect(() => {
+    if (showLegacyInterface) {
+      setAppState('legacy')
+      return
+    }
+    
+    if (currentPath === '/' || currentPath === '') {
+      setAppState('welcome')
+      return
+    }
+    
+    // If there's a path like /bedroom, try to show that room
+    const slugFromPath = currentPath.slice(1).split('/')[0] // remove leading slash and get first segment
+    const foundWorld = worlds.find(w => w.slug === slugFromPath)
+    
+    if (slugFromPath && foundWorld) {
+      setAppState('room')
+      setCurrentRoomSlug(slugFromPath)
+      setRoomName(foundWorld.project?.display_name || foundWorld.slug)
+    } else {
+      setAppState('welcome')
+    }
+  }, [currentPath, worlds, showLegacyInterface])
+  
+  // Check if we have worlds
+  const hasWorlds = worlds.length > 0
 
   const refreshWorlds = useCallback(async () => {
     if (!import.meta.env.DEV) return
@@ -56,19 +108,121 @@ export function App() {
     }
   }, [refreshWorlds])
 
-  if (!worlds.length) {
+  // Handle different app states
+  if (appState === 'legacy' || showLegacyInterface) {
+    // Show legacy developer interface
+    if (!worlds.length) {
+      return (
+        <div className="flex items-center justify-center h-screen text-white bg-black">
+          No worlds found in worlds/
+        </div>
+      )
+    }
+    
     return (
-      <div className="flex items-center justify-center h-screen text-white bg-black">
-        No worlds found in worlds/
-      </div>
+      <LoadedApp
+        worlds={worlds}
+        refreshingWorlds={refreshingWorlds}
+        onRefreshWorlds={refreshWorlds}
+      />
     )
   }
-
+  
+  // New user interface flow
+  if (appState === 'welcome') {
+    return (
+      <WelcomeInterface 
+        onStartUpload={() => setAppState('upload')}
+        recentRooms={hasWorlds ? worlds.map(w => ({
+          slug: w.slug,
+          name: w.project?.display_name || w.slug,
+          createdAt: new Date() // TODO: Get actual creation date
+        })) : []}
+        onOpenRoom={(slug) => {
+          // Navigate to the room URL
+          window.history.pushState(null, '', `/${slug}`)
+          setCurrentRoomSlug(slug)
+          setAppState('room')
+          const foundWorld = worlds.find(w => w.slug === slug)
+          setRoomName(foundWorld?.project?.display_name || foundWorld?.slug || slug)
+        }}
+      />
+    )
+  }
+  
+  if (appState === 'upload') {
+    return (
+      <UploadInterface 
+        onStartProcessing={(files, name) => {
+          setUploadedFiles(files)
+          setRoomName(name)
+          setAppState('processing')
+        }}
+        onCancel={() => setAppState('welcome')}
+      />
+    )
+  }
+  
+  if (appState === 'processing') {
+    return (
+      <ProcessingInterface 
+        roomName={roomName}
+        fileCount={uploadedFiles.length}
+        onComplete={(slug) => {
+          setCurrentRoomSlug(slug)
+          setAppState('room')
+          // TODO: Save room data and trigger world generation
+        }}
+        onCancel={() => setAppState('welcome')}
+      />
+    )
+  }
+  
+  if (appState === 'room' && currentRoomSlug) {
+    const roomWorld = worlds.find(w => w.slug === currentRoomSlug)
+    
+    if (roomWorld) {
+      return (
+        <RoomExplorer
+          roomName={roomName || roomWorld.slug}
+          roomSlug={currentRoomSlug}
+          onNewRoom={() => {
+            setAppState('welcome')
+            setCurrentRoomSlug(null)
+            setRoomName('')
+            setUploadedFiles([])
+          }}
+          onShareRoom={() => {
+            // TODO: Implement sharing
+            console.log('Share room:', currentRoomSlug)
+          }}
+        >
+          <CleanWorldViewer
+            worlds={worlds}
+            targetSlug={currentRoomSlug}
+            refreshingWorlds={refreshingWorlds}
+            onRefreshWorlds={refreshWorlds}
+          />
+        </RoomExplorer>
+      )
+    } else {
+      // Room not found, show placeholder or loading
+      return (
+        <div className="flex items-center justify-center h-screen text-white bg-black">
+          <div className="text-center">
+            <div className="animate-spin w-8 h-8 border-2 border-white/20 border-t-white rounded-full mx-auto mb-4" />
+            <p>Loading your 3D room...</p>
+          </div>
+        </div>
+      )
+    }
+  }
+  
+  // Fallback - should not reach here with new logic
   return (
-    <LoadedApp
-      worlds={worlds}
-      refreshingWorlds={refreshingWorlds}
-      onRefreshWorlds={refreshWorlds}
+    <WelcomeInterface 
+      onStartUpload={() => setAppState('upload')}
+      recentRooms={[]}
     />
   )
 }
@@ -77,10 +231,12 @@ function LoadedApp({
   worlds,
   refreshingWorlds,
   onRefreshWorlds,
+  targetSlug,
 }: {
   worlds: WorldEntry[]
   refreshingWorlds: boolean
   onRefreshWorlds: () => void
+  targetSlug?: string
 }) {
   const [editMatch, editParams] = useRoute('/:slug/edit')
   const [match, params] = useRoute('/:slug')
@@ -94,7 +250,7 @@ function LoadedApp({
   const [hoveredObjectInstanceId, setHoveredObjectInstanceId] = useState<string | null>(null)
   const [hoveredWorldPreview, setHoveredWorldPreview] = useState<WorldHoverPreview | null>(null)
 
-  const slug = editParams?.slug ?? params?.slug ?? worlds[0].slug
+  const slug = targetSlug ?? editParams?.slug ?? params?.slug ?? worlds[0]?.slug
   const entry = worlds.find((w) => w.slug === slug) ?? worlds[0]
   const editing = Boolean(editMatch)
   const showLeva = import.meta.env.VITE_SHOW_LEVA === 'true'
@@ -147,8 +303,19 @@ function LoadedApp({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  if (!editMatch && !match) {
+  if (!targetSlug && !editMatch && !match && worlds.length > 0) {
     return <Redirect to={`/${worlds[0].slug}`} />
+  }
+  
+  if (!entry) {
+    return (
+      <div className="flex items-center justify-center h-screen text-white bg-black">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-white/20 border-t-white rounded-full mx-auto mb-4" />
+          <p>Loading room...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
