@@ -16,7 +16,7 @@ interface WorldGenerationRequest {
 }
 
 export async function generateWorld(request: WorldGenerationRequest) {
-  const { worldSlug, roomName, image, textPrompt, base64Data, fileExtension } = request
+  const { worldSlug, roomName, image, textPrompt, base64Data } = request
   
   try {
     console.log(`🏗️ Starting world generation for ${roomName}`)

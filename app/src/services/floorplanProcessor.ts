@@ -128,7 +128,7 @@ export class FloorPlanProcessor {
     return 'living_room' // default
   }
 
-  static async generateWorldFromRoomImages(roomImages: string[], roomName: string): Promise<{ success: boolean; worldSlug?: string }> {
+  static async generateWorldFromRoomImages(_roomImages: string[], roomName: string): Promise<{ success: boolean; worldSlug?: string }> {
     try {
       console.log('🌍 Creating 3D world from uploaded images...')
       
